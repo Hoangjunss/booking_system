@@ -1,0 +1,997 @@
+{
+  "info": {
+    "name": "Concert Booking Platform API",
+    "description": "Complete API collection with normal and error test cases (separate tokens for admin and customer)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Normal Cases",
+      "item": [
+        {
+          "name": "Authentication",
+          "item": [
+            {
+              "name": "Register (create new customer)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    console.log('User registered:', pm.response.json().email);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newcustomer@example.com\",\n  \"name\": \"New Customer\",\n  \"password\": \"123456\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/auth/register",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "auth", "register"]
+                }
+              }
+            },
+            {
+              "name": "Login as Admin",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.accessToken) {",
+                      "    pm.collectionVariables.set(\"adminToken\", jsonData.accessToken);",
+                      "    pm.collectionVariables.set(\"adminRefreshToken\", jsonData.refreshToken);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@geek.com\",\n  \"password\": \"admin123\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/auth/login",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "auth", "login"]
+                }
+              }
+            },
+            {
+              "name": "Login as Customer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.accessToken) {",
+                      "    pm.collectionVariables.set(\"customerToken\", jsonData.accessToken);",
+                      "    pm.collectionVariables.set(\"customerRefreshToken\", jsonData.refreshToken);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"customer123\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/auth/login",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "auth", "login"]
+                }
+              }
+            },
+            {
+              "name": "Refresh Admin Token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{adminRefreshToken}}\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/auth/refresh",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "auth", "refresh"]
+                }
+              }
+            },
+            {
+              "name": "Refresh Customer Token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{customerRefreshToken}}\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/auth/refresh",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "auth", "refresh"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer - Public",
+          "item": [
+            {
+              "name": "Get all published concerts",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/concerts",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "concerts"]
+                }
+              }
+            },
+            {
+              "name": "Get concert details by ID",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/concerts/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "concerts", "1"]
+                }
+              }
+            },
+            {
+              "name": "Get ticket categories of a concert",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/concerts/1/ticket-categories",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "concerts", "1", "ticket-categories"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer - Booking (requires customer token)",
+          "item": [
+            {
+              "name": "Create booking (idempotent)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 2,\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-123456\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/bookings",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "bookings"]
+                }
+              }
+            },
+            {
+              "name": "Cancel a booking",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Changed my mind\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/bookings/1/cancel",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "bookings", "1", "cancel"]
+                }
+              }
+            },
+            {
+              "name": "Get booking by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/bookings/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "bookings", "1"]
+                }
+              }
+            },
+            {
+              "name": "Get my bookings",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/bookings/user",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "bookings", "user"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin - Concert Management (requires admin token)",
+          "item": [
+            {
+              "name": "Create concert",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Summer Fest\",\n  \"description\": \"Outdoor concert\",\n  \"venue\": \"Central Park\",\n  \"eventDate\": \"2025-08-10T19:00:00\",\n  \"ticketCategories\": [\n    {\"name\": \"VIP\", \"price\": 150, \"totalQuantity\": 50},\n    {\"name\": \"General\", \"price\": 45, \"totalQuantity\": 500}\n  ]\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/admin/concerts",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "concerts"]
+                }
+              }
+            },
+            {
+              "name": "Update concert",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"name\": \"Summer Fest 2025\"}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/admin/concerts/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "concerts", "1"]
+                }
+              }
+            },
+            {
+              "name": "Publish concert",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/concerts/1/publish",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "concerts", "1", "publish"]
+                }
+              }
+            },
+            {
+              "name": "Unpublish concert",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/concerts/1/unpublish",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "concerts", "1", "unpublish"]
+                }
+              }
+            },
+            {
+              "name": "Delete concert",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/concerts/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "concerts", "1"]
+                }
+              }
+            },
+            {
+              "name": "Get all concerts (admin with filters)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/concerts?name=fest&status=PUBLISHED&page=0&size=10",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "concerts"],
+                  "query": [
+                    {"key": "name", "value": "fest"},
+                    {"key": "status", "value": "PUBLISHED"},
+                    {"key": "page", "value": "0"},
+                    {"key": "size", "value": "10"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get concert by ID (admin)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/concerts/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "concerts", "1"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin - Ticket Category Management (requires admin token)",
+          "item": [
+            {
+              "name": "Create ticket category",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"name\": \"Early Bird\", \"price\": 30, \"totalQuantity\": 200}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/admin/ticket-categories?concertId=1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "ticket-categories"],
+                  "query": [{"key": "concertId", "value": "1"}]
+                }
+              }
+            },
+            {
+              "name": "Update ticket category",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"price\": 35}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/admin/ticket-categories/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "ticket-categories", "1"]
+                }
+              }
+            },
+            {
+              "name": "Delete ticket category",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/ticket-categories/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "ticket-categories", "1"]
+                }
+              }
+            },
+            {
+              "name": "Get ticket categories by concert (admin)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/ticket-categories/concert/1?page=0&size=10",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "ticket-categories", "concert", "1"],
+                  "query": [
+                    {"key": "page", "value": "0"},
+                    {"key": "size", "value": "10"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get ticket category by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/ticket-categories/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "ticket-categories", "1"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin - Voucher Management (requires admin token)",
+          "item": [
+            {
+              "name": "Create voucher",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"code\": \"SUMMER20\", \"discountType\": \"PERCENT\", \"discountValue\": 20, \"usageLimit\": 100, \"validFrom\": \"2025-01-01T00:00:00\", \"validTo\": \"2025-12-31T23:59:59\", \"minOrderValue\": 50}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/admin/vouchers",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "vouchers"]
+                }
+              }
+            },
+            {
+              "name": "Get all vouchers (filtered)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/vouchers?code=FLASH&discountType=PERCENT&page=0&size=10",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "vouchers"],
+                  "query": [
+                    {"key": "code", "value": "FLASH"},
+                    {"key": "discountType", "value": "PERCENT"},
+                    {"key": "page", "value": "0"},
+                    {"key": "size", "value": "10"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get voucher by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/vouchers/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "vouchers", "1"]
+                }
+              }
+            },
+            {
+              "name": "Get voucher by code",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/vouchers/code/FLASH10",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "vouchers", "code", "FLASH10"]
+                }
+              }
+            },
+            {
+              "name": "Delete voucher",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/vouchers/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "vouchers", "1"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin - Booking Management (requires admin token)",
+          "item": [
+            {
+              "name": "Get all bookings (admin filter)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/bookings?status=PENDING&page=0&size=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "bookings"],
+                  "query": [
+                    {"key": "status", "value": "PENDING"},
+                    {"key": "page", "value": "0"},
+                    {"key": "size", "value": "20"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Update booking status to PAID",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/bookings/1/status?status=PAID",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "bookings", "1", "status"],
+                  "query": [{"key": "status", "value": "PAID"}]
+                }
+              }
+            },
+            {
+              "name": "Update booking status to CANCELLED",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/bookings/1/status?status=CANCELLED",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "bookings", "1", "status"],
+                  "query": [{"key": "status", "value": "CANCELLED"}]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin - User Management (requires admin token)",
+          "item": [
+            {
+              "name": "Create user (admin)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"email\": \"operator@geek.com\", \"name\": \"Operator\", \"password\": \"op123\", \"role\": \"OPERATOR\"}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "users"]
+                }
+              }
+            },
+            {
+              "name": "Get all users (filtered)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users?role=ADMIN&page=0&size=10",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "users"],
+                  "query": [
+                    {"key": "role", "value": "ADMIN"},
+                    {"key": "page", "value": "0"},
+                    {"key": "size", "value": "10"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get user by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "users", "1"]
+                }
+              }
+            },
+            {
+              "name": "Update user",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"name\": \"Super Admin\", \"role\": \"ADMIN\"}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/2",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "users", "2"]
+                }
+              }
+            },
+            {
+              "name": "Delete user",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/3",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "users", "3"]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Cases",
+      "item": [
+        {
+          "name": "Validation Errors (400)",
+          "item": [
+            {
+              "name": "Create booking - missing categoryId",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"quantity\": 1,\n  \"idempotencyKey\": \"uuid-missing-cat\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - missing quantity",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"idempotencyKey\": \"uuid-missing-qty\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - missing idempotencyKey",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - quantity = 0",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 0,\n  \"idempotencyKey\": \"uuid-zero-qty\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - negative quantity",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": -5,\n  \"idempotencyKey\": \"uuid-negative-qty\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Register - invalid email format",
+              "request": {
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"not-an-email\",\n  \"name\": \"Test\",\n  \"password\": \"123456\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/auth/register", "host": ["{{base_url}}"], "path": ["api", "auth", "register"]}
+              }
+            },
+            {
+              "name": "Register - missing password",
+              "request": {
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"test@example.com\",\n  \"name\": \"Test\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/auth/register", "host": ["{{base_url}}"], "path": ["api", "auth", "register"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "Business Logic Errors (400/409)",
+          "item": [
+            {
+              "name": "Create booking - overselling (quantity > available)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 9999,\n  \"idempotencyKey\": \"uuid-oversell\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - invalid voucher code (not exist)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"INVALID_CODE\",\n  \"idempotencyKey\": \"uuid-invalid-voucher\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - expired voucher (need to create expired voucher in DB first)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"EXPIRED\",\n  \"idempotencyKey\": \"uuid-expired-voucher\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - user already used this voucher (abuse)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-already-used\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Cancel booking - not in PENDING state",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"reason\": \"Try cancel non-pending\"}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings/1/cancel", "host": ["{{base_url}}"], "path": ["api", "bookings", "1", "cancel"]}
+              }
+            },
+            {
+              "name": "Admin update booking - invalid transition (PAID to PENDING)",
+              "request": {
+                "method": "PUT",
+                "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/bookings/1/status?status=PENDING",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "bookings", "1", "status"],
+                  "query": [{"key": "status", "value": "PENDING"}]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorization Errors (401, 403)",
+          "item": [
+            {
+              "name": "Get my bookings - no token (401)",
+              "request": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/api/bookings/user", "host": ["{{base_url}}"], "path": ["api", "bookings", "user"]}
+              }
+            },
+            {
+              "name": "Access admin bookings with customer token (403)",
+              "request": {
+                "method": "GET",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "url": {"raw": "{{base_url}}/api/admin/bookings", "host": ["{{base_url}}"], "path": ["api", "admin", "bookings"]}
+              }
+            },
+            {
+              "name": "Cancel another user's booking (403)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"reason\": \"Try cancel someone else's booking\"}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings/1/cancel", "host": ["{{base_url}}"], "path": ["api", "bookings", "1", "cancel"]}
+              }
+            },
+            {
+              "name": "Create booking with expired token (401)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer expired.token.here", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"idempotencyKey\": \"uuid-expired-token\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            }
+          ]
+        },
+        {
+          "name": "Not Found Errors (404)",
+          "item": [
+            {
+              "name": "Get booking by non-existent ID",
+              "request": {
+                "method": "GET",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "url": {"raw": "{{base_url}}/api/bookings/99999", "host": ["{{base_url}}"], "path": ["api", "bookings", "99999"]}
+              }
+            },
+            {
+              "name": "Get concert by non-existent ID",
+              "request": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/api/concerts/99999", "host": ["{{base_url}}"], "path": ["api", "concerts", "99999"]}
+              }
+            },
+            {
+              "name": "Get ticket category by non-existent ID (admin)",
+              "request": {
+                "method": "GET",
+                "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}],
+                "url": {"raw": "{{base_url}}/api/admin/ticket-categories/99999", "host": ["{{base_url}}"], "path": ["api", "admin", "ticket-categories", "99999"]}
+              }
+            },
+            {
+              "name": "Get voucher by non-existent code (admin)",
+              "request": {
+                "method": "GET",
+                "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}],
+                "url": {"raw": "{{base_url}}/api/admin/vouchers/code/NOTEXIST", "host": ["{{base_url}}"], "path": ["api", "admin", "vouchers", "code", "NOTEXIST"]}
+              }
+            },
+            {
+              "name": "Admin update booking status - booking not found",
+              "request": {
+                "method": "PUT",
+                "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/bookings/99999/status?status=PAID",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "admin", "bookings", "99999", "status"],
+                  "query": [{"key": "status", "value": "PAID"}]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Conflict / Idempotency",
+          "item": [
+            {
+              "name": "Duplicate idempotency key (should return existing booking - 200 OK)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-123456\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8080", "type": "string"},
+    {"key": "adminToken", "value": "", "type": "string"},
+    {"key": "adminRefreshToken", "value": "", "type": "string"},
+    {"key": "customerToken", "value": "", "type": "string"},
+    {"key": "customerRefreshToken", "value": "", "type": "string"}
+  ]
+}
