@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Concert Booking Platform API",
-    "description": "Complete API collection with normal and error test cases (separate tokens for admin and customer). Supports multi-item bookings.",
+    "description": "Complete API collection with normal and error test cases (separate tokens for admin and customer).\n\n**Key points:**\n- Booking requests use `items` array, each with `ticketCategoryId` and `quantity`.\n- `idempotencyKey` must be a unique UUID per request; duplicates return existing booking + `duplicate: true` flag.\n- Admin endpoints require `ADMIN` role.\n- Concerts must be `PUBLISHED` to be bookable.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -10,9 +10,11 @@
       "item": [
         {
           "name": "Authentication",
+          "description": "Endpoints for user registration, login, and token refresh.",
           "item": [
             {
               "name": "Register (create new customer)",
+              "description": "Creates a new user with role `CUSTOMER`. Passwords are hashed with BCrypt.\n\n**Request body:**\n- `email`: valid email\n- `name`: display name\n- `password`: at least 8 characters",
               "event": [
                 {
                   "listen": "test",
@@ -43,6 +45,7 @@
             },
             {
               "name": "Login as Admin",
+              "description": "Login with seeded admin account (see `sql/seed.sql`). Stores `adminToken` and `adminRefreshToken` in collection variables.",
               "event": [
                 {
                   "listen": "test",
@@ -63,7 +66,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"admin@geek.com\",\n  \"password\": \"admin123\"\n}",
+                  "raw": "{\n  \"email\": \"admin@geek.com\",\n  \"password\": \"admingeel\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {
@@ -75,6 +78,7 @@
             },
             {
               "name": "Login as Customer (seed customer)",
+              "description": "Login with seeded customer (from `seed.sql`). Stores `customerToken` and `customerRefreshToken`.",
               "event": [
                 {
                   "listen": "test",
@@ -95,7 +99,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"customer1@example.com\",\n  \"password\": \"password\"\n}",
+                  "raw": "{\n  \"email\": \"customer1@example.com\",\n  \"password\": \"customergeek\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {
@@ -107,6 +111,7 @@
             },
             {
               "name": "Refresh Admin Token",
+              "description": "Use a valid refresh token to obtain a new access token. The refresh token remains valid (no blacklist).",
               "request": {
                 "method": "POST",
                 "header": [],
@@ -124,6 +129,7 @@
             },
             {
               "name": "Refresh Customer Token",
+              "description": "Refresh customer access token.",
               "request": {
                 "method": "POST",
                 "header": [],
@@ -143,9 +149,11 @@
         },
         {
           "name": "Customer - Public (No Auth)",
+          "description": "Public endpoints that do not require authentication.",
           "item": [
             {
               "name": "Get all published concerts",
+              "description": "Returns list of concerts with status `PUBLISHED`. Data may be cached (Redis TTL 5 mins).",
               "request": {
                 "method": "GET",
                 "url": {
@@ -157,6 +165,7 @@
             },
             {
               "name": "Get concert details by ID",
+              "description": "Returns full concert details, including ticket categories (price + available quantity).",
               "request": {
                 "method": "GET",
                 "url": {
@@ -168,6 +177,7 @@
             },
             {
               "name": "Get ticket categories of a concert",
+              "description": "Returns only the ticket categories for a given concert.",
               "request": {
                 "method": "GET",
                 "url": {
@@ -181,9 +191,11 @@
         },
         {
           "name": "Customer - Booking (requires customer token)",
+          "description": "Booking operations require customer authentication token.",
           "item": [
             {
               "name": "Create booking (single item)",
+              "description": "Creates a booking for **one** ticket category.\n\n**Request body:**\n- `items`: array of objects\n  - `ticketCategoryId`: ID of ticket category (e.g., 1,2,3)\n  - `quantity`: number of tickets (>=1)\n- `voucherCode`: optional (e.g., \"FLASH10\")\n- `idempotencyKey`: **required** – a unique UUID to prevent duplicate requests.\n\n**Response:**\n- `bookingResponse`: details of the booking (including `items`)\n- `duplicate`: `false` for first request, `true` if same key used again (no new booking created).\n\n**Example:**\n```json\n{\n  \"items\": [{\"ticketCategoryId\": 1, \"quantity\": 2}],\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-single-123\"\n}\n```",
               "request": {
                 "method": "POST",
                 "header": [
@@ -203,6 +215,7 @@
             },
             {
               "name": "Create booking (multiple items - same concert)",
+              "description": "Creates a booking with **multiple ticket categories** (all must belong to the same concert). The total price is summed before voucher discount. The `items` array can have several entries.\n\n**Example:**\n```json\n{\n  \"items\": [\n    {\"ticketCategoryId\": 1, \"quantity\": 1},\n    {\"ticketCategoryId\": 2, \"quantity\": 2}\n  ],\n  \"voucherCode\": \"FIXED20\",\n  \"idempotencyKey\": \"uuid-multi-456\"\n}\n```",
               "request": {
                 "method": "POST",
                 "header": [
@@ -222,6 +235,7 @@
             },
             {
               "name": "Cancel a booking",
+              "description": "Cancels a `PENDING` booking (only allowed for the owner). Reserved tickets are automatically restored (trigger or manual release).",
               "request": {
                 "method": "POST",
                 "header": [
@@ -241,6 +255,7 @@
             },
             {
               "name": "Get booking by ID",
+              "description": "Retrieves a specific booking (only accessible by the owner or admin). Includes all items.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -255,6 +270,7 @@
             },
             {
               "name": "Get my bookings",
+              "description": "Lists all bookings of the authenticated customer (basic info, items are not loaded to avoid N+1).",
               "request": {
                 "method": "GET",
                 "header": [
@@ -271,9 +287,11 @@
         },
         {
           "name": "Admin - Concert Management (requires admin token)",
+          "description": "Admin endpoints for managing concerts.",
           "item": [
             {
               "name": "Create concert",
+              "description": "Creates a new concert (status `DRAFT`). May include an array of `ticketCategories`.",
               "request": {
                 "method": "POST",
                 "header": [
@@ -293,6 +311,7 @@
             },
             {
               "name": "Update concert",
+              "description": "Partial update of concert details (name, description, venue, event date, status).",
               "request": {
                 "method": "PUT",
                 "header": [
@@ -312,6 +331,7 @@
             },
             {
               "name": "Publish concert",
+              "description": "Changes concert status to `PUBLISHED`, making it visible to customers.",
               "request": {
                 "method": "POST",
                 "header": [
@@ -326,6 +346,7 @@
             },
             {
               "name": "Unpublish concert",
+              "description": "Changes concert status to `DRAFT`, hiding it from customers.",
               "request": {
                 "method": "POST",
                 "header": [
@@ -340,6 +361,7 @@
             },
             {
               "name": "Get all concerts (admin with filters)",
+              "description": "Paginated list of all concerts (including drafts). Supports filters: name, venue, status, date range.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -360,6 +382,7 @@
             },
             {
               "name": "Get concert by ID (admin)",
+              "description": "Returns concert details even if not published (admin view).",
               "request": {
                 "method": "GET",
                 "header": [
@@ -376,9 +399,11 @@
         },
         {
           "name": "Admin - Ticket Category Management (requires admin token)",
+          "description": "Administration of ticket categories.",
           "item": [
             {
               "name": "Create ticket category",
+              "description": "Add a new ticket category to a concert (requires `concertId` query parameter).",
               "request": {
                 "method": "POST",
                 "header": [
@@ -399,6 +424,7 @@
             },
             {
               "name": "Update ticket category",
+              "description": "Partial update of ticket category (price, name, totalQuantity). Adjusts availableQuantity automatically.",
               "request": {
                 "method": "PUT",
                 "header": [
@@ -418,6 +444,7 @@
             },
             {
               "name": "Get ticket categories by concert (admin)",
+              "description": "Paginated, filterable list of ticket categories for a given concert.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -436,6 +463,7 @@
             },
             {
               "name": "Get ticket category by ID",
+              "description": "Retrieve a single ticket category by its ID.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -452,9 +480,11 @@
         },
         {
           "name": "Admin - Voucher Management (requires admin token)",
+          "description": "Admin endpoints for managing promotional vouchers (create-only, no updates/deletes).",
           "item": [
             {
               "name": "Create voucher",
+              "description": "Creates a new voucher. Fields:\n- `code`: unique string\n- `discountType`: `PERCENT` or `FIXED`\n- `discountValue`: number\n- `usageLimit`: total times usable (default 1)\n- `validFrom` / `validTo`: ISO 8601 timestamps\n- `minOrderValue`: minimum order total to apply (default 0)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -474,6 +504,7 @@
             },
             {
               "name": "Get all vouchers (filtered)",
+              "description": "Paginated list of vouchers with optional filters: code (partial), discountType, isValid (current validity), validFrom/To range.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -494,6 +525,7 @@
             },
             {
               "name": "Get voucher by ID",
+              "description": "Retrieve a single voucher by its database ID.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -508,6 +540,7 @@
             },
             {
               "name": "Get voucher by code",
+              "description": "Retrieve a voucher by its unique code string.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -524,9 +557,11 @@
         },
         {
           "name": "Admin - Booking Management (requires admin token)",
+          "description": "Admin endpoints to view and update booking statuses.",
           "item": [
             {
               "name": "Get all bookings (admin filter)",
+              "description": "Paginated list of all bookings (across all users). Filterable by status, userId, concertId, date range.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -546,6 +581,7 @@
             },
             {
               "name": "Update booking status to PAID",
+              "description": "Transition a `PENDING` booking to `PAID`. (Manual payment confirmation).",
               "request": {
                 "method": "PUT",
                 "header": [
@@ -561,6 +597,7 @@
             },
             {
               "name": "Update booking status to CANCELLED",
+              "description": "Transition a `PENDING` booking to `CANCELLED`. Tickets will be released automatically.",
               "request": {
                 "method": "PUT",
                 "header": [
@@ -578,9 +615,11 @@
         },
         {
           "name": "Admin - User Management (requires admin token)",
+          "description": "Admin endpoints for managing users (create, list, update). Delete operations are not implemented.",
           "item": [
             {
               "name": "Create user (admin)",
+              "description": "Creates a new user with specified role (`CUSTOMER`, `OPERATOR`, or `ADMIN`).",
               "request": {
                 "method": "POST",
                 "header": [
@@ -600,6 +639,7 @@
             },
             {
               "name": "Get all users (filtered)",
+              "description": "Paginated list of users with optional filters: email (partial), name (partial), role.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -619,6 +659,7 @@
             },
             {
               "name": "Get user by ID",
+              "description": "Retrieve user details by ID.",
               "request": {
                 "method": "GET",
                 "header": [
@@ -633,6 +674,7 @@
             },
             {
               "name": "Update user",
+              "description": "Partial update of user (name, password, role).",
               "request": {
                 "method": "PUT",
                 "header": [
@@ -656,12 +698,15 @@
     },
     {
       "name": "Error Cases",
+      "description": "Test cases for various error responses (validation, business logic, authentication, not found, idempotency).",
       "item": [
         {
           "name": "Validation Errors (400)",
+          "description": "Requests with missing or invalid fields.",
           "item": [
             {
               "name": "Create booking - missing items array",
+              "description": "Sending a booking request without the `items` array triggers validation error.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -675,6 +720,7 @@
             },
             {
               "name": "Create booking - empty items array",
+              "description": "Items array must not be empty.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -688,6 +734,7 @@
             },
             {
               "name": "Create booking - missing ticketCategoryId in item",
+              "description": "Each item must include `ticketCategoryId`.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -701,6 +748,7 @@
             },
             {
               "name": "Create booking - missing quantity in item",
+              "description": "Each item must include `quantity` (>=1).",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -714,6 +762,7 @@
             },
             {
               "name": "Create booking - quantity = 0",
+              "description": "Quantity must be at least 1.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -727,6 +776,7 @@
             },
             {
               "name": "Create booking - negative quantity",
+              "description": "Quantity cannot be negative.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -740,6 +790,7 @@
             },
             {
               "name": "Create booking - missing idempotencyKey",
+              "description": "Idempotency key is required.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -753,6 +804,7 @@
             },
             {
               "name": "Register - invalid email format",
+              "description": "Email must be a valid format.",
               "request": {
                 "method": "POST",
                 "body": {
@@ -765,6 +817,7 @@
             },
             {
               "name": "Register - missing password",
+              "description": "Password is required.",
               "request": {
                 "method": "POST",
                 "body": {
@@ -779,9 +832,11 @@
         },
         {
           "name": "Business Logic Errors (400/409)",
+          "description": "Semantic errors (overselling, invalid voucher, wrong status transition).",
           "item": [
             {
               "name": "Create booking - overselling (quantity > available)",
+              "description": "Requesting more tickets than available triggers `409 Conflict` with `INSUFFICIENT_INVENTORY`.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -795,6 +850,7 @@
             },
             {
               "name": "Create booking - invalid voucher code (not exist)",
+              "description": "Non-existent voucher code returns 400 with error code `BUSINESS_ERROR`.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -807,7 +863,8 @@
               }
             },
             {
-              "name": "Create booking - expired voucher (assumes voucher with code EXPIRED exists with past validity)",
+              "name": "Create booking - expired voucher",
+              "description": "Voucher past its `valid_to` date returns a business error.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -821,6 +878,7 @@
             },
             {
               "name": "Create booking - user already used this voucher (abuse)",
+              "description": "Each user can use a voucher only once (enforced by unique constraint). Second attempt fails.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -834,6 +892,7 @@
             },
             {
               "name": "Create booking - concert not published",
+              "description": "Cannot book a concert that is not in `PUBLISHED` status.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -847,6 +906,7 @@
             },
             {
               "name": "Cancel booking - not in PENDING state",
+              "description": "Only bookings with status `PENDING` can be cancelled.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -860,6 +920,7 @@
             },
             {
               "name": "Admin update booking - invalid transition (PAID to PENDING)",
+              "description": "Only allowed transitions: PENDING → PAID/CANCELLED/FAILED, PAID → CANCELLED. Others return 400.",
               "request": {
                 "method": "PUT",
                 "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}],
@@ -875,9 +936,11 @@
         },
         {
           "name": "Authorization Errors (401, 403)",
+          "description": "Missing or invalid token, role insufficient.",
           "item": [
             {
               "name": "Get my bookings - no token (401)",
+              "description": "Request without Authorization header returns 401.",
               "request": {
                 "method": "GET",
                 "url": {"raw": "{{base_url}}/api/bookings/user", "host": ["{{base_url}}"], "path": ["api", "bookings", "user"]}
@@ -885,6 +948,7 @@
             },
             {
               "name": "Access admin bookings with customer token (403)",
+              "description": "Customer token cannot access admin endpoints – returns 403.",
               "request": {
                 "method": "GET",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -893,6 +957,7 @@
             },
             {
               "name": "Cancel another user's booking (403)",
+              "description": "A user can only cancel their own bookings. Trying to cancel someone else's returns 403.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
@@ -906,6 +971,7 @@
             },
             {
               "name": "Create booking with expired token (401)",
+              "description": "Expired JWT token returns 401.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer expired.token.here", "type": "text"}],
@@ -921,6 +987,7 @@
         },
         {
           "name": "Not Found Errors (404)",
+          "description": "Requests referencing non-existent resources.",
           "item": [
             {
               "name": "Get booking by non-existent ID",
@@ -970,9 +1037,11 @@
         },
         {
           "name": "Conflict / Idempotency",
+          "description": "Test idempotency key behaviour.",
           "item": [
             {
               "name": "Duplicate idempotency key (should return existing booking with duplicate flag)",
+              "description": "Send the same `idempotencyKey` twice. First request returns `duplicate: false`; second returns the same booking with `duplicate: true`. No new booking created.",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],

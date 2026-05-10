@@ -37,6 +37,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(authenticationEntryPoint())  // xử lý 401
+                .accessDeniedHandler(accessDeniedHandler())           // xử lý 403
+        )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
