@@ -246,6 +246,7 @@ A complete Postman collection is provided in the repository:
 │   │       └── application.properties
 │   └── test/                  # Unit, integration, and concurrent tests
 └── booking_system.postman_collection.json
+```
 ## Limitations & Known Issues
 
 - **Single instance deployment** – horizontal scaling would require a load balancer and shared Redis.
