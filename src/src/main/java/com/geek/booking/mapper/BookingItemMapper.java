@@ -9,9 +9,11 @@ import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(componentModel = "spring")
 public interface BookingItemMapper {
 
+    @Mapping(source = "booking.id", target = "bookingId")
+    @Mapping(source = "ticketCategory.id", target = "ticketCategoryId")
     @Mapping(source = "ticketCategory.name", target = "categoryName")
     @Mapping(target = "subtotal", expression = "java(item.getUnitPrice().multiply(java.math.BigDecimal.valueOf(item.getQuantity())))")
     BookingItemResponse toResponse(BookingItem item);

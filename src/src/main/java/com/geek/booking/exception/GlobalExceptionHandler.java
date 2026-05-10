@@ -23,28 +23,27 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    // Bắt BusinessException (và các con của nó) - trả về 400 Bad Request kèm message chi tiết
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException ex) {
         log.warn("Business error: {}", ex.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, "BUSINESS_ERROR", ex.getMessage());
     }
 
-    // Bắt InsufficientInventoryException - trả về 409 Conflict
+
     @ExceptionHandler(InsufficientInventoryException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientInventory(InsufficientInventoryException ex) {
         log.warn("Inventory error: {}", ex.getMessage());
         return buildResponse(HttpStatus.CONFLICT, "INSUFFICIENT_INVENTORY", ex.getMessage());
     }
 
-    // Bắt ResourceNotFoundException - trả về 404 Not Found
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage());
         return buildResponse(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
-    // Bắt validation errors
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
@@ -98,11 +97,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
-        // Có thể kiểm tra lỗi unique constraint
-        if (ex.getMessage().contains("idempotency_key")) {
-            return buildResponse(HttpStatus.CONFLICT, "DUPLICATE_REQUEST", "Idempotency key already used");
-        }
-        return buildResponse(HttpStatus.CONFLICT, "DATA_INTEGRITY", "Database constraint violation");
+        String rootMsg = ex.getMostSpecificCause().getMessage();
+        String message = CONSTRAINT_MESSAGES.entrySet().stream()
+                .filter(e -> rootMsg.contains(e.getKey()))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse("Database constraint violation");
+        return buildResponse(HttpStatus.CONFLICT, "DATA_INTEGRITY", message);
     }
 
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String code, String message) {
@@ -114,4 +115,10 @@ public class GlobalExceptionHandler {
                 .build();
         return new ResponseEntity<>(response, status);
     }
+    private static final Map<String, String> CONSTRAINT_MESSAGES = Map.of(
+            "idempotency_key", "Idempotency key already used. Do not retry with same key.",
+            "uniq_user_voucher", "You have already used this voucher.",
+            "users_email_key", "Email already exists.",
+            "vouchers_code_key", "Voucher code already exists."
+    );
 }

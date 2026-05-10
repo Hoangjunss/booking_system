@@ -11,7 +11,6 @@ import java.util.List;
 public interface TicketCategoryMapper {
 
     TicketCategoryResponse toResponse(TicketCategory category);
-    List<TicketCategoryResponse> toResponseList(List<TicketCategory> categories);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "concert", ignore = true)

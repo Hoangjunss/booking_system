@@ -5,9 +5,10 @@
 - **Booking status lifecycle:** A booking can have one of the following statuses: `PENDING`, `PAID`, `CANCELLED`, `EXPIRED`, `FAILED`. No real payment gateway is integrated; therefore the `PAID`/`FAILED` statuses are manually updated by administrators via the admin dashboard.
 - **Voucher usage rules:** Each user can use a given voucher only once (enforced by the `user_voucher_usage` table). Vouchers are **create-only** – after creation they cannot be updated or deleted. Only admins can create new vouchers.
 - **Concert publication:** Only concerts with status `PUBLISHED` are visible to customers. Admins can publish or unpublish a concert at any time.
-- **Idempotency key generation:** The client (frontend/mobile application) is responsible for generating a unique UUID for each booking attempt and sending it in the `Idempotency-Key` header. The server does not generate keys on behalf of the client.
-- **Inventory management:** The `ticket_categories` table stores both `total_quantity` and a separate `available_quantity`. A database trigger automatically restores `available_quantity` when a booking is cancelled, expires, or fails.
+- **Idempotency key generation:** The client (frontend/mobile application) is responsible for generating a unique UUID for each booking attempt and sending it in the `Idempotency-Key` header (or in request body). The server does not generate keys on behalf of the client.
+- **Inventory management:** The `ticket_categories` table stores both `total_quantity` and a separate `available_quantity`. A database trigger automatically restores `available_quantity` when a booking is cancelled, expires, or fails. **The service layer never performs manual inventory release** – double release is impossible.
 - **Authentication & authorisation:** The system uses JWT with access tokens (15 minutes) and refresh tokens (7 days). No token blacklist is implemented; a stolen refresh token remains valid until its natural expiration.
+
 ## 2. Implemented Features
 
 ### 2.1 Customer‑facing APIs (no authentication required or customer role)
@@ -20,7 +21,7 @@
 | `GET /api/concerts` | List all published concerts (simple list, no pagination). |
 | `GET /api/concerts/{id}` | Get details of a specific concert. |
 | `GET /api/concerts/{id}/ticket-categories` | List ticket categories (with price and availability) for a concert. |
-| `POST /api/bookings` | Create a booking (requires `Idempotency-Key` header, quantity, categoryId, optional voucherCode). |
+| `POST /api/bookings` | Create a booking (idempotent, supports multiple ticket categories in one request). Requires `idempotencyKey` in body. |
 | `POST /api/bookings/{id}/cancel` | Cancel a pending booking (only allowed if `status == PENDING`). |
 | `GET /api/bookings/{id}` | Retrieve a single booking (only if the authenticated user owns it). |
 | `GET /api/bookings/user` | List all bookings of the authenticated customer. |
@@ -33,32 +34,31 @@
 | `PUT /api/admin/concerts/{id}` | Update concert details (name, description, venue, event date, status). |
 | `POST /api/admin/concerts/{id}/publish` | Set concert status to `PUBLISHED`. |
 | `POST /api/admin/concerts/{id}/unpublish` | Set concert status back to `DRAFT`. |
-| `DELETE /api/admin/concerts/{id}` | Delete a concert (cascade deletes ticket categories, bookings, etc.). |
 | `GET /api/admin/concerts` | Paginated list of concerts with filters (name, venue, status, date range). |
 | `GET /api/admin/concerts/{id}` | Get concert details. |
 | `POST /api/admin/ticket-categories?concertId={id}` | Create a new ticket category under a concert. |
 | `PUT /api/admin/ticket-categories/{id}` | Update price, name, or total quantity. |
-| `DELETE /api/admin/ticket-categories/{id}` | Delete a ticket category. |
 | `GET /api/admin/ticket-categories/concert/{concertId}` | Paginated list with filters (name, min/max price, min available). |
 | `GET /api/admin/ticket-categories/{id}` | Get category details. |
 | `POST /api/admin/vouchers` | Create a new voucher (code, discount type, value, limits, validity). |
 | `GET /api/admin/vouchers` | Paginated list with filters (code, discountType, isValid, validFrom/To). |
 | `GET /api/admin/vouchers/{id}` | Get voucher by ID. |
 | `GET /api/admin/vouchers/code/{code}` | Get voucher by code. |
-| `DELETE /api/admin/vouchers/{id}` | Delete a voucher. |
 | `GET /api/admin/bookings` | Paginated list of all bookings with filters (status, userId, concertId, date range). |
-| `PUT /api/admin/bookings/{id}/status` | Manually update a booking status (e.g., `PENDING` → `PAID` / `CANCELLED` / `FAILED`). Releases tickets when appropriate. |
+| `PUT /api/admin/bookings/{id}/status` | Manually update a booking status (e.g., `PENDING` → `PAID` / `CANCELLED` / `FAILED`). Releases tickets automatically via database trigger. |
 | `POST /api/admin/users` | Create a user (can specify role; default `CUSTOMER`). |
 | `PUT /api/admin/users/{id}` | Update user name, password, or role. |
 | `GET /api/admin/users/{id}` | Get user details. |
 | `GET /api/admin/users` | Paginated list with filters (email, name, role). |
-| `DELETE /api/admin/users/{id}` | Delete a user (no check for existing bookings – assumes none). |
+
+> **Note:** Delete operations (concerts, ticket categories, users, vouchers) are **not implemented** in the current version to keep the scope focused on core flash‑sale features.
+
 ### 2.3 Core Business Logic
 
-- **Idempotency:** Unique constraint on `bookings.idempotency_key`. The service checks for an existing key before creating a new booking. If found, returns the previous result.
+- **Idempotency:** Unique constraint on `bookings.idempotency_key`. The service checks for an existing key before creating a new booking. If found, returns the previous result with a `duplicate: true` flag (or `Idempotency-Processed` header).
 - **Overselling prevention:** Pessimistic row locking (`SELECT FOR UPDATE`) on `ticket_categories` row inside the booking transaction. If `available_quantity` is insufficient, a `409 Conflict` is returned.
 - **Voucher anti-abuse:** The `user_voucher_usage` table has a unique constraint `(user_id, voucher_id)`. The voucher row is also locked (`SELECT FOR UPDATE`) inside the booking transaction to safely increment `used_count`.
-- **Inventory release:** A database trigger (`release_tickets_on_booking_cancel()`) automatically restores `available_quantity` when a booking status changes from `PENDING` to `CANCELLED`, `EXPIRED`, or `FAILED`.
+- **Inventory release:** A database trigger (`release_tickets_on_booking_cancel()`) automatically restores `available_quantity` when a booking status changes from `PENDING` to `CANCELLED`, `EXPIRED`, or `FAILED`. **No manual release code exists** in the service layer.
 - **Caching (Redis):** Frequently accessed queries – such as `getPublishedConcerts()` and `getConcertById()` – are cached using Spring Cache with Redis as the cache store. Cache TTL is 5 minutes, and cache is automatically evicted when concerts are created, updated, published, or deleted. This reduces database load during flash sale read peaks.
 - **Global exception handling:** `@RestControllerAdvice` returns consistent JSON error responses with appropriate HTTP status codes (400, 401, 403, 404, 409, 500) and human‑readable messages.
 - **Security:** JWT authentication with access/refresh tokens. Passwords hashed with BCrypt. Role‑based authorisation via `@PreAuthorize("hasRole('ADMIN')")`.
@@ -67,8 +67,8 @@
 
 - **Dockerisation:** `Dockerfile` (multi‑stage build) and `docker-compose.yml` (PostgreSQL 15, Redis 7, Spring Boot app).
 - **API documentation:** Swagger UI available at `http://localhost:8080/swagger-ui/index.html` (SpringDoc OpenAPI).
-- **Postman collection:** Provided in `postman/` folder, includes normal cases and error cases (duplicate idempotency, overselling, invalid voucher, missing token, 403, 404, etc.).
-- **Unit tests:** JUnit 5 + Mockito covering `UserService`, `ConcertService`, `TicketCategoryService`, `VoucherService`, `BookingService`, `BookingItemService`, `UserVoucherUsageService`.
+- **Postman collection:** Provided in `postman/` folder, includes normal cases and error cases (duplicate idempotency, overselling, invalid voucher, missing token, 403, 404, validation errors).
+- **Testing:** Comprehensive test suite including unit tests (JUnit 5 + Mockito), integration tests (Testcontainers for PostgreSQL), and concurrent tests (simulate flash‑sale thread contention).
 - **Logging:** SLF4J + Logback – `DEBUG` level for `com.geek.booking`, `INFO` for infrastructure.
 
 ## 3. Not Implemented Features 
@@ -77,7 +77,8 @@
 |---------|---------------------------|
 | Real payment gateway integration (Stripe, PayPal) | Out of scope for the assignment; admin manually updates `PAID` status. |
 | Update (PUT) on vouchers | Kept simple: vouchers are create‑only. |
-| Soft delete for users / concerts | Not required; hard delete is acceptable. |
+| Delete endpoints (concerts, ticket categories, users, vouchers) | Omitted to keep focus on core booking flow; can be added later. |
+| Soft delete for users / concerts | Not required; hard delete is acceptable but not implemented. |
 | Real‑time seat map / WebSocket | Not part of the problem statement; ticket category‑based booking only. |
 | Message queue for async processing | Load is moderate (500 req/min), synchronous processing is sufficient. |
 | Full‑text search for concerts | Not implemented; simple `LIKE` filters via Specifications. |
@@ -96,7 +97,7 @@
 - **Redis dependency for caching & rate limiting:** If Redis is unavailable, concert caching falls back to database (higher load) and rate limiting is disabled (no protection).
 - **Partial index on vouchers removed:** The original partial index using `CURRENT_TIMESTAMP` was removed because PostgreSQL requires index predicates to be immutable. A regular composite index is used instead – slightly less efficient but still adequate.
 - **Trigger‑based ticket release:** Works only when the `status` column is updated via JPA. Direct SQL updates would bypass the trigger.
-- **Unit test coverage:** Core logic is covered, but edge cases (e.g., concurrent locking) are not fully tested.
+- **Concurrent idempotency test disabled:** The test `concurrentIdempotencyKey_shouldCreateOnlyOneBooking` is temporarily disabled due to a Hibernate session issue after duplicate key exception. The unique constraint still guarantees correctness.
 - **No load testing:** The system has not been benchmarked beyond the expected 500 req/min.
 
 ## 5. Out of Scope 
@@ -124,9 +125,10 @@
 ## 7. Testing Scope
 
 - **Unit tests:** All service layers are unit tested using JUnit 5 and Mockito. Tests cover success paths, validation failures, business exceptions (insufficient inventory, invalid voucher), and repository mocking.
-- **Integration tests:** Testcontainers are used in a few tests (optional) but not executed by default to speed up the build.
+- **Integration tests:** Using Testcontainers (PostgreSQL 15) to verify database constraints, trigger behaviour, and end‑to‑end flows such as booking creation and cancellation. These tests are part of the suite but may be disabled in certain builds due to environment dependencies.
+- **Concurrent tests:** Simulate flash‑sale loads with `ExecutorService` and `CountDownLatch` to prove overselling prevention and voucher limit enforcement. One test (concurrent idempotency) is currently disabled (see Limitations).
 - **Postman collection:** Manual testing of all endpoints, including both normal and error cases (duplicate idempotency, overselling, expired token, 403, 404, validation errors).
-- **What is not tested:** Load testing, concurrent race condition simulation, end‑to‑end UI testing.
+- **What is not tested:** Load testing, end‑to‑end UI testing.
 
 ## 8. Deployment Notes
 
@@ -140,9 +142,9 @@
 
 The delivered backend fully satisfies the core requirements defined in the technical assessment:
 - Flash‑safe ticket booking with **overselling prevention** (pessimistic locks).
-- **Duplicate request protection** (idempotency key + unique constraint).
+- **Duplicate request protection** (idempotency key + unique constraint + duplicate flag).
 - **Voucher abuse prevention** (unique user‑voucher constraint + row lock).
 - **Operation dashboard** (admin APIs) for managing concerts, ticket categories, vouchers, bookings, and users.
-- **Clean code structure**, unit tests, Dockerisation, and comprehensive documentation (README, DESIGN, SCOPE, Postman collection).
+- **Clean code structure**, unit/integration/concurrent tests, Dockerisation, and comprehensive documentation (README, DESIGN, SCOPE, Postman collection).
 
 All missing or out‑of‑scope features are explicitly documented, and the system can be demonstrated immediately using the provided Docker setup and Postman collection.

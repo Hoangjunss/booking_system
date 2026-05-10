@@ -6,7 +6,7 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = BookingItemMapper.class)
 public interface BookingMapper {
 
 
@@ -14,5 +14,6 @@ public interface BookingMapper {
     @Mapping(source = "user.id", target = "userId")
     @Mapping(source = "concert.id", target = "concertId")
     @Mapping(source = "concert.name", target = "concertName")
+    @Mapping(source = "items", target = "items")
     BookingResponse toResponse(Booking booking);
 }

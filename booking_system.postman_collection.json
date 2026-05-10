@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Concert Booking Platform API",
-    "description": "Complete API collection with normal and error test cases (separate tokens for admin and customer)",
+    "description": "Complete API collection with normal and error test cases (separate tokens for admin and customer). Supports multi-item bookings.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -31,7 +31,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"newcustomer@example.com\",\n  \"name\": \"New Customer\",\n  \"password\": \"123456\"\n}",
+                  "raw": "{\n  \"email\": \"newcustomer@example.com\",\n  \"name\": \"New Customer\",\n  \"password\": \"12345678\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {
@@ -74,7 +74,7 @@
               }
             },
             {
-              "name": "Login as Customer",
+              "name": "Login as Customer (seed customer)",
               "event": [
                 {
                   "listen": "test",
@@ -95,7 +95,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"customer123\"\n}",
+                  "raw": "{\n  \"email\": \"customer1@example.com\",\n  \"password\": \"password\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {
@@ -142,7 +142,7 @@
           ]
         },
         {
-          "name": "Customer - Public",
+          "name": "Customer - Public (No Auth)",
           "item": [
             {
               "name": "Get all published concerts",
@@ -183,7 +183,7 @@
           "name": "Customer - Booking (requires customer token)",
           "item": [
             {
-              "name": "Create booking (idempotent)",
+              "name": "Create booking (single item)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -191,7 +191,26 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 2,\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-123456\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 2 }\n  ],\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-single-123\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/bookings",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "bookings"]
+                }
+              }
+            },
+            {
+              "name": "Create booking (multiple items - same concert)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 1 },\n    { \"ticketCategoryId\": 2, \"quantity\": 2 }\n  ],\n  \"voucherCode\": \"FIXED20\",\n  \"idempotencyKey\": \"uuid-multi-456\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {
@@ -320,20 +339,6 @@
               }
             },
             {
-              "name": "Delete concert",
-              "request": {
-                "method": "DELETE",
-                "header": [
-                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/concerts/1",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "admin", "concerts", "1"]
-                }
-              }
-            },
-            {
               "name": "Get all concerts (admin with filters)",
               "request": {
                 "method": "GET",
@@ -404,20 +409,6 @@
                   "raw": "{\"price\": 35}",
                   "options": {"raw": {"language": "json"}}
                 },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/ticket-categories/1",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "admin", "ticket-categories", "1"]
-                }
-              }
-            },
-            {
-              "name": "Delete ticket category",
-              "request": {
-                "method": "DELETE",
-                "header": [
-                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
-                ],
                 "url": {
                   "raw": "{{base_url}}/api/admin/ticket-categories/1",
                   "host": ["{{base_url}}"],
@@ -526,20 +517,6 @@
                   "raw": "{{base_url}}/api/admin/vouchers/code/FLASH10",
                   "host": ["{{base_url}}"],
                   "path": ["api", "admin", "vouchers", "code", "FLASH10"]
-                }
-              }
-            },
-            {
-              "name": "Delete voucher",
-              "request": {
-                "method": "DELETE",
-                "header": [
-                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/vouchers/1",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "admin", "vouchers", "1"]
                 }
               }
             }
@@ -672,20 +649,6 @@
                   "path": ["api", "admin", "users", "2"]
                 }
               }
-            },
-            {
-              "name": "Delete user",
-              "request": {
-                "method": "DELETE",
-                "header": [
-                  {"key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text"}
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/users/3",
-                  "host": ["{{base_url}}"],
-                  "path": ["api", "admin", "users", "3"]
-                }
-              }
             }
           ]
         }
@@ -698,39 +661,52 @@
           "name": "Validation Errors (400)",
           "item": [
             {
-              "name": "Create booking - missing categoryId",
+              "name": "Create booking - missing items array",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"quantity\": 1,\n  \"idempotencyKey\": \"uuid-missing-cat\"\n}",
+                  "raw": "{\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-missing-items\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
               }
             },
             {
-              "name": "Create booking - missing quantity",
+              "name": "Create booking - empty items array",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"idempotencyKey\": \"uuid-missing-qty\"\n}",
+                  "raw": "{\n  \"items\": [],\n  \"idempotencyKey\": \"uuid-empty-items\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
               }
             },
             {
-              "name": "Create booking - missing idempotencyKey",
+              "name": "Create booking - missing ticketCategoryId in item",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1\n}",
+                  "raw": "{\n  \"items\": [\n    { \"quantity\": 2 }\n  ],\n  \"idempotencyKey\": \"uuid-missing-catid\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - missing quantity in item",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1 }\n  ],\n  \"idempotencyKey\": \"uuid-missing-qty\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
@@ -743,7 +719,7 @@
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 0,\n  \"idempotencyKey\": \"uuid-zero-qty\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 0 }\n  ],\n  \"idempotencyKey\": \"uuid-zero-qty\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
@@ -756,7 +732,20 @@
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": -5,\n  \"idempotencyKey\": \"uuid-negative-qty\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": -5 }\n  ],\n  \"idempotencyKey\": \"uuid-negative-qty\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - missing idempotencyKey",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 1 }\n  ]\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
@@ -768,7 +757,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"not-an-email\",\n  \"name\": \"Test\",\n  \"password\": \"123456\"\n}",
+                  "raw": "{\n  \"email\": \"not-an-email\",\n  \"name\": \"Test\",\n  \"password\": \"12345678\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/auth/register", "host": ["{{base_url}}"], "path": ["api", "auth", "register"]}
@@ -798,7 +787,7 @@
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 9999,\n  \"idempotencyKey\": \"uuid-oversell\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 9999 }\n  ],\n  \"idempotencyKey\": \"uuid-oversell\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
@@ -811,20 +800,20 @@
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"INVALID_CODE\",\n  \"idempotencyKey\": \"uuid-invalid-voucher\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 1 }\n  ],\n  \"voucherCode\": \"INVALID_CODE\",\n  \"idempotencyKey\": \"uuid-invalid-voucher\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
               }
             },
             {
-              "name": "Create booking - expired voucher (need to create expired voucher in DB first)",
+              "name": "Create booking - expired voucher (assumes voucher with code EXPIRED exists with past validity)",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"EXPIRED\",\n  \"idempotencyKey\": \"uuid-expired-voucher\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 1 }\n  ],\n  \"voucherCode\": \"EXPIRED\",\n  \"idempotencyKey\": \"uuid-expired-voucher\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
@@ -837,7 +826,20 @@
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-already-used\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 1 }\n  ],\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-already-used\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
+              }
+            },
+            {
+              "name": "Create booking - concert not published",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 10, \"quantity\": 1 }\n  ],\n  \"idempotencyKey\": \"uuid-unpublished-concert\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
@@ -909,7 +911,7 @@
                 "header": [{"key": "Authorization", "value": "Bearer expired.token.here", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"idempotencyKey\": \"uuid-expired-token\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 1 }\n  ],\n  \"idempotencyKey\": \"uuid-expired-token\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}
@@ -970,13 +972,13 @@
           "name": "Conflict / Idempotency",
           "item": [
             {
-              "name": "Duplicate idempotency key (should return existing booking - 200 OK)",
+              "name": "Duplicate idempotency key (should return existing booking with duplicate flag)",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": 1,\n  \"quantity\": 1,\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-123456\"\n}",
+                  "raw": "{\n  \"items\": [\n    { \"ticketCategoryId\": 1, \"quantity\": 1 }\n  ],\n  \"voucherCode\": \"FLASH10\",\n  \"idempotencyKey\": \"uuid-123456\"\n}",
                   "options": {"raw": {"language": "json"}}
                 },
                 "url": {"raw": "{{base_url}}/api/bookings", "host": ["{{base_url}}"], "path": ["api", "bookings"]}

@@ -7,12 +7,11 @@
 -- TRUNCATE TABLE user_voucher_usage, booking_items, bookings, ticket_categories, vouchers, concerts, users RESTART IDENTITY CASCADE;
 
 -- Insert users (password = "password" encoded with BCrypt: $2a$10$...)
--- For demo: admin@example.com / admin123, customer1@example.com / pass123
+-- For demo: admin@geek.com / admingeek, customer1@geek.com / customergeek
 INSERT INTO users (email, name, password, role, created_at, updated_at) VALUES
-('admin@example.com', 'Admin User', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EfMlE6lUq7X5qJfH5Q5Q5u', 'ADMIN', NOW(), NOW()),
-('operator@example.com', 'Operator User', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EfMlE6lUq7X5qJfH5Q5Q5u', 'OPERATOR', NOW(), NOW()),
-('customer1@example.com', 'John Doe', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EfMlE6lUq7X5qJfH5Q5Q5u', 'CUSTOMER', NOW(), NOW()),
-('customer2@example.com', 'Jane Smith', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EfMlE6lUq7X5qJfH5Q5Q5u', 'CUSTOMER', NOW(), NOW());
+('admin@geek.com', 'Admin User', '$2a$10$o1q4S8B2OkFnqJubdlCcAeDtdifRhol/dWKLL3Dq7DHmEuOyq7oGu', 'ADMIN', NOW(), NOW()),
+('customer1@geek.com', 'John Doe', '$2a$10$7X3echZzWiL7w4WMQeW.T.tDibh8bRPGBJhMwK1URVoGnUIs8Cuq2', 'CUSTOMER', NOW(), NOW()),
+('customer2@geek.com', 'Jane Smith', '$2a$10$7X3echZzWiL7w4WMQeW.T.tDibh8bRPGBJhMwK1URVoGnUIs8Cuq2', 'CUSTOMER', NOW(), NOW());
 
 -- Insert concerts
 INSERT INTO concerts (name, description, venue, event_date, status, created_at, updated_at) VALUES
@@ -38,7 +37,7 @@ INSERT INTO ticket_categories (concert_id, name, price, total_quantity, availabl
 
 -- Insert vouchers
 INSERT INTO vouchers (code, discount_type, discount_value, usage_limit, used_count, valid_from, valid_to, min_order_value, created_at, updated_at) VALUES
-('FLASH10', 'PERCENT', 10, 500, 0, '2025-05-01 00:00:00', '2025-12-31 23:59:59', 0, NOW(), NOW()),
+('FLASH10', 'PERCENT', 10, 500, 0, '2025-05-01 00:00:00', '2026-12-31 23:59:59', 0, NOW(), NOW()),
 ('FIXED20', 'FIXED', 20, 100, 0, '2025-05-01 00:00:00', '2025-08-31 23:59:59', 50, NOW(), NOW()),
 ('WELCOME5', 'PERCENT', 5, 1000, 0, '2025-01-01 00:00:00', '2025-12-31 23:59:59', 0, NOW(), NOW());
 

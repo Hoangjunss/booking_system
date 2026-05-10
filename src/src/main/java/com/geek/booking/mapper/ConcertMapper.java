@@ -10,11 +10,13 @@ import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = TicketCategoryMapper.class)
 public interface ConcertMapper {
 
     @Mapping(source = "ticketCategories", target = "ticketCategories")
     ConcertResponse toResponse(Concert concert);
+
+
 
     List<ConcertResponse> toResponseList(List<Concert> concerts);
 

@@ -1,5 +1,76 @@
 # System Design – Concert Ticket Booking Platform
 
+- [System Design – Concert Ticket Booking Platform](#system-design--concert-ticket-booking-platform)
+  - [1. Architecture Overview](#1-architecture-overview)
+    - [1.1 Scope \& Assumptions](#11-scope--assumptions)
+      - [Implemented Features](#implemented-features)
+  - [2. Technology Stack](#2-technology-stack)
+  - [3. Database Design](#3-database-design)
+    - [3.1 Database Tables Description](#31-database-tables-description)
+    - [3.2 Critical Constraints](#32-critical-constraints)
+    - [3.3 Inventory Management](#33-inventory-management)
+  - [4. Key Design Decisions \& Rationale](#4-key-design-decisions--rationale)
+    - [4.1 Preventing Overselling in Flash Sale](#41-preventing-overselling-in-flash-sale)
+    - [4.2 Idempotency to Avoid Duplicate Bookings](#42-idempotency-to-avoid-duplicate-bookings)
+    - [4.3 Voucher Abuse Prevention](#43-voucher-abuse-prevention)
+    - [4.4 Database Choice: PostgreSQL vs MySQL](#44-database-choice-postgresql-vs-mysql)
+    - [4.5 Caching (Optional)](#45-caching-optional)
+    - [4.6 Security – JWT with Access \& Refresh Tokens](#46-security--jwt-with-access--refresh-tokens)
+  - [5. Overall System Limitations](#5-overall-system-limitations)
+    - [5.1 Single Instance Deployment](#51-single-instance-deployment)
+    - [5.2 Synchronous Processing (No Message Queue)](#52-synchronous-processing-no-message-queue)
+    - [5.3 No Automated Payment Integration](#53-no-automated-payment-integration)
+    - [5.4 Limited Token Revocation (JWT Refresh Tokens)](#54-limited-token-revocation-jwt-refresh-tokens)
+    - [5.5 Incomplete Partial Index on Vouchers](#55-incomplete-partial-index-on-vouchers)
+    - [5.6 No Real‑Time Seat Map](#56-no-realtime-seat-map)
+    - [5.7 Redis Caching Fallback Behaviour](#57-redis-caching-fallback-behaviour)
+  - [6. Error Handling \& Logging](#6-error-handling--logging)
+    - [6.1 Global Exception Handler](#61-global-exception-handler)
+    - [6.2 Specific Exception Mappings](#62-specific-exception-mappings)
+    - [6.3 Why These HTTP Status Codes?](#63-why-these-http-status-codes)
+    - [6.4 Logging Strategy](#64-logging-strategy)
+    - [6.5 Why Not Return Stack Traces in Production Responses?](#65-why-not-return-stack-traces-in-production-responses)
+    - [6.6 Example Error Responses](#66-example-error-responses)
+  - [7. Testing Strategy](#7-testing-strategy)
+    - [7.1 Integration Tests (Testcontainers)](#71-integration-tests-testcontainers)
+    - [7.2 Concurrent Tests (Flash‑Sale Scenarios)](#72-concurrent-tests-flashsale-scenarios)
+    - [7.3 Unit Tests (Service Layer)](#73-unit-tests-service-layer)
+      - [7.3.1 `BookingServiceTest`](#731-bookingservicetest)
+      - [7.3.2 `ConcertServiceTest`](#732-concertservicetest)
+      - [7.3.3 `TicketCategoryServiceTest`](#733-ticketcategoryservicetest)
+      - [7.3.4 `VoucherServiceTest`](#734-voucherservicetest)
+      - [7.3.5 `UserServiceTest`](#735-userservicetest)
+      - [7.3.6 `BookingItemServiceTest`](#736-bookingitemservicetest)
+      - [7.3.7 `UserVoucherUsageServiceTest`](#737-uservoucherusageservicetest)
+    - [7.4 Controller Tests (Web Layer)](#74-controller-tests-web-layer)
+    - [7.5 Running the Tests](#75-running-the-tests)
+  - [8. Deployment](#8-deployment)
+    - [8.1 Prerequisites](#81-prerequisites)
+    - [8.2 Using Docker Compose (recommended)](#82-using-docker-compose-recommended)
+      - [Project structure (relevant files)](#project-structure-relevant-files)
+      - [Environment variables (`.env` file)](#environment-variables-env-file)
+    - [Starting the system](#starting-the-system)
+    - [Health checks](#health-checks)
+    - [Verifying the deployment](#verifying-the-deployment)
+    - [Accessing the services](#accessing-the-services)
+    - [Stopping and cleaning up](#stopping-and-cleaning-up)
+  - [8.3 Manual Setup (without Docker)](#83-manual-setup-without-docker)
+  - [8.4 Troubleshooting Common Deployment Issues](#84-troubleshooting-common-deployment-issues)
+  - [8.5 Performance Tuning for Flash Sale](#85-performance-tuning-for-flash-sale)
+  - [8.6 Summary](#86-summary)
+  - [9. Future Improvements](#9-future-improvements)
+    - [9.1 Introduce a Message Queue for Asynchronous Payment Handling](#91-introduce-a-message-queue-for-asynchronous-payment-handling)
+    - [9.2 Use Redis with TTL for Idempotency Keys](#92-use-redis-with-ttl-for-idempotency-keys)
+    - [9.3 Distributed Lock (Redisson) for Multiple Application Instances](#93-distributed-lock-redisson-for-multiple-application-instances)
+    - [9.4 Full‑Text Search for Concerts](#94-fulltext-search-for-concerts)
+    - [9.5 Real‑Time Seat Map with WebSockets](#95-realtime-seat-map-with-websockets)
+    - [9.6 Advanced Monitoring and Alerting](#96-advanced-monitoring-and-alerting)
+    - [9.7 Idempotency Key Rotation (Cleanup Job)](#97-idempotency-key-rotation-cleanup-job)
+    - [9.8 Rate Limiting per User (Stricter Enforcement)](#98-rate-limiting-per-user-stricter-enforcement)
+    - [Summary of Prioritised Improvements](#summary-of-prioritised-improvements)
+  - [10. Conclusion](#10-conclusion)
+
+
 ## 1. Architecture Overview
 
 The source code is organised into the following packages, each with a clear responsibility:
@@ -27,8 +98,64 @@ The source code is organised into the following packages, each with a clear resp
 - **`specification`** – JPA `Specification` implementations for dynamic query building (e.g. `BookingSpecification`, `ConcertSpecification`). Used by service layers that require filterable, pageable queries (admin dashboards).
 
 All these packages are assembled into a single Spring Boot monolith. The monolith approach is chosen for simplicity, transactional consistency (critical for pessimistic locking), and adequate performance for the expected flash‑sale traffic (50 000 users, 300‑500 bookings/minute).
+### 1.1 Scope & Assumptions
+> **For a complete, detailed list of all features, limitations, and out‑of‑scope items, please refer to [`Scope.md`](./Scope.md).** The following summary highlights the most critical aspects.
 
+The system is built as a concert ticket booking platform optimised for flash‑sale scenarios. The following key assumptions and scope definitions directly influence the design.
 
+**Core assumptions:**
+
+- **Concert availability:** Only concerts with status `PUBLISHED` are visible to customers and can be booked. Draft, ended, or cancelled concerts are not bookable.
+- **Booking statuses:** A booking can be `PENDING`, `PAID`, `CANCELLED`, `FAILED`, or `EXPIRED`. No live payment gateway is integrated; administrators manually update a booking to `PAID` via the admin dashboard.
+- **Inventory control:** Each ticket category maintains `available_quantity`. Pessimistic row locking (`SELECT FOR UPDATE`) is used to serialise decrements, guaranteeing zero overselling.
+- **Ticket release on cancellation/expiration:** When a booking is cancelled, expires or fails, the reserved tickets are restored **automatically** by a PostgreSQL `AFTER UPDATE` trigger. The service layer does **not** perform any manual release – thus double release is impossible.
+- **Idempotency:** Every booking request requires a client‑generated `idempotencyKey` (UUID). The database enforces a `UNIQUE` constraint. Duplicate keys return the existing booking together with a `duplicate: true` flag (or an `Idempotency-Processed` header). Network retries never create duplicate bookings.
+- **Voucher abuse protection:** Each voucher has a `usage_limit` and each user can use a given voucher only once, enforced by a composite `UNIQUE` constraint on `(user_id, voucher_id)`. The voucher row is locked with `SELECT FOR UPDATE` inside the booking transaction, making concurrent increments safe.
+- **Authentication & authorisation:** Stateless JWT tokens (access token 15 min, refresh token 7 days). Role‑based access distinguishes `CUSTOMER` and `ADMIN`. Token revocation is not implemented (acceptable for assessment scope).
+- **Deployment:** Single Spring Boot instance, PostgreSQL 15, optional Redis for caching. Docker Compose provides one‑command startup. No load balancer, no message queue, no horizontal scaling.
+
+#### Implemented Features
+
+**Customer‑facing capabilities**
+
+- **Account management:** Registration and login using email/password. Upon successful authentication, the system issues a pair of JWT tokens (access token valid for 15 minutes, refresh token valid for 7 days) to maintain stateless sessions.
+- **Concert discovery:** Customers can browse all published concerts and view detailed information about a specific concert, including its venue, date, and all associated ticket categories (name, price, and current available quantity). Unpublished or cancelled concerts are never exposed.
+- **Booking creation (idempotent, multi‑item):** A booking can contain one or more ticket categories in a single request. The client must provide a unique `idempotencyKey` (UUID); the database enforces a unique constraint, and duplicate keys return the previously created booking with a `duplicate: true` flag – ensuring that network retries never produce duplicates. During booking, each selected ticket category is locked with `SELECT FOR UPDATE` (pessimistic row lock), and the available quantity is decremented only if sufficient stock exists. Vouchers (if provided) are validated (expiry, usage limit, minimum order value) and applied to the total price. The entire operation is atomic and transactional.
+- **Booking cancellation:** A pending booking can be cancelled by its owner. The system automatically restores the reserved tickets via a database trigger (no manual inventory manipulation), preventing double‑release bugs.
+- **Booking history:** Customers can retrieve a list of their own bookings (including status, total price, and creation time) and view the detailed items of any specific booking.
+
+**Administrative & operational features**
+
+- **Concert management:** Administrators can create, update, publish/unpublish, and delete concerts. A newly created concert starts in `DRAFT` status and only becomes visible to customers after explicit publication.
+- **Ticket category management:** Under each concert, administrators can add, modify, or remove ticket categories. When the total quantity of a category is increased or decreased, the available quantity is adjusted automatically while preserving consistency.
+- **Voucher management:** Administrators can create promotional vouchers with either percentage or fixed discounts, specify a usage limit, validity period, and minimum order value. Vouchers are immutable after creation (no updates or deletions) to simplify logic and prevent fraud.
+- **User management:** Administrators can create, update, list, and view users, as well as assign roles (`CUSTOMER`, `OPERATOR`, `ADMIN`). Only users with the `ADMIN` role have access to these endpoints.
+- **Booking oversight:** Administrators can view all bookings using filters (status, user, concert, date range) and pagination. They can manually transition a booking from `PENDING` to `PAID`, `CANCELLED`, or `FAILED` according to business rules (e.g., a paid booking cannot be reverted to pending).
+
+**Technical & cross‑cutting features**
+
+- **Global exception handling:** A single `@RestControllerAdvice` intercepts all exceptions and returns a consistent JSON error response containing a timestamp, HTTP status, machine‑readable error code, and a human‑readable message. Stack traces are never leaked to clients.
+- **Redis caching:** Frequently accessed concert queries (`getPublishedConcerts` and `getConcertById`) are cached with a 5‑minute TTL using Spring Cache and Redis. Any write operation that modifies concert data (create, update, publish, unpublish, delete) evicts the affected cache entries, ensuring eventual consistency.
+- **Comprehensive testing suite:**
+  - **Unit tests:** Service layers are tested with JUnit 5 and Mockito, covering all business logic (idempotency checks, inventory management, voucher validation, status transitions).
+  - **Integration tests:** Using Testcontainers (PostgreSQL 15) to verify database constraints (unique, check), trigger behaviour, and end‑to‑end flows such as booking creation and cancellation.
+  - **Concurrent tests:** Simulate flash‑sale loads using `ExecutorService` and `CountDownLatch` to prove that overselling prevention and voucher limit enforcement work correctly under high thread contention.
+- **API documentation & testing:** Swagger UI (`/swagger-ui/index.html`) provides interactive API documentation. A Postman collection (included in the repository) covers all endpoints, including both normal and error cases.
+- **Dockerised deployment:** A `Dockerfile` and `docker-compose.yml` orchestrate PostgreSQL 15, Redis 7 (optional), and the Spring Boot application. Environment variables (`.env`) control all configuration, making it easy to spin up a complete environment with one command.
+
+**Out of scope (not implemented):**
+
+- Real payment gateway integration (Stripe, PayPal etc.).
+- Seat map / individual seat selection.
+- Voucher update or delete.
+- Soft delete of users or concerts.
+- Full‑text search.
+- Real‑time WebSocket updates.
+- Rate limiting (optional, may be added later).
+- Message queue for asynchronous payment processing.
+- Refresh token blacklist / revocation.
+
+For a complete and detailed list of features, limitations, and trade‑offs, refer to [`Scope.md`](./Scope.md).
 ## 2. Technology Stack
 
 | Component | Technology | Reason |
@@ -150,6 +277,16 @@ Optional<TicketCategory> findByIdWithPessimisticLock(@Param("id") Long id);
 
 **Selected approach:** Client‑generated UUID stored in the `bookings` table with a **unique constraint**.
 
+**Response differentiation:**  
+When a client sends a duplicate `idempotencyKey`, the server returns the same booking data as the first request, but also includes a `duplicate` flag in the response body (or a custom header `Idempotency-Processed: true`). This allows the client to distinguish between a newly created booking and a cached result. For example:
+
+```json
+{
+  "bookingResponse": { ... },
+  "duplicate": true
+}
+```
+This design choice simplifies client logic: the client can safely retry the same request without fear of creating duplicate bookings, and can check the `duplicate` flag to show an appropriate message (e.g., "Booking already confirmed")
 **Why not use the other approaches?**
 - **Redis/Token bucket** adds external dependencies and complexity; the current traffic does not require the extra performance.
 - **Server‑generated keys** would require additional round trips or stateful coordination, making the system harder to scale.
@@ -424,10 +561,146 @@ The system uses a single `@RestControllerAdvice` class (`GlobalExceptionHandler`
 
 ## 7. Testing Strategy
 
-- **Unit tests** – For service layer using JUnit 5 + Mockito. All business logic (idempotency, inventory checks, voucher validation) is covered. Example: `BookingServiceTest`, `ConcertServiceTest`, etc.
-- **Integration tests** – Optional (using Testcontainers) to verify database interactions. Not mandatory for the submission but included to show proficiency.
+The system includes a comprehensive test suite covering integration, concurrent, unit, and controller tests.  
+- **Integration tests** use Testcontainers (PostgreSQL 15) to verify database interactions, constraints, and end‑to‑end flows.  
+- **Concurrent tests** simulate flash‑sale scenarios to ensure overselling prevention and idempotency under race conditions.  
+- **Unit tests** (JUnit 5 + Mockito) cover service layer business logic.  
+- **Controller tests** verify HTTP endpoints, validation, and security.
 
-Run tests with:
+---
+
+### 7.1 Integration Tests (Testcontainers)
+
+These tests run against a real PostgreSQL container, ensuring that database constraints, triggers, and transactions behave correctly.
+
+| Test Class | Test Method | Description | Key Assertions |
+|------------|-------------|-------------|----------------|
+| `BookingServiceIntegrationTest` | `shouldCreateBookingAndDecreaseInventory` | Full booking creation flow | Booking and `booking_items` persisted; `available_quantity` decreased by requested amount |
+| | `shouldReturnExistingBookingWhenDuplicateIdempotencyKey` | Duplicate idempotency key | Returns existing booking; no new booking created; `duplicate` flag or header present |
+| | `shouldThrowExceptionWhenInsufficientInventoryAndRollback` | Overselling attempt | Throws `InsufficientInventoryException`; no booking saved; inventory unchanged |
+| | `shouldEnforceUniqueConstraintOnIdempotencyKey` | Direct duplicate insert (bypass service) | Throws `DataIntegrityViolationException` (unique constraint) |
+| | `shouldEnforceUniqueUserVoucherConstraint` | Same user tries to use same voucher twice | Second attempt fails with business error (voucher already used) |
+| | `shouldNotCreateBookingForUnpublishedConcert` | Concert status `DRAFT` or not `PUBLISHED` | Throws `BusinessException` with message "Concert not available" |
+| | `shouldReleaseInventoryOnCancel` | Cancel a pending booking – tickets restored | `available_quantity` returns to original value (via trigger or manual release) |
+
+> **Note:** Integration tests are executed with `@Transactional` to roll back changes after each test, keeping the database clean.
+
+---
+
+### 7.2 Concurrent Tests (Flash‑Sale Scenarios)
+
+These tests simulate high‑concurrency situations using `CountDownLatch` and `ExecutorService`. They verify that the system behaves correctly under race conditions.
+
+| Test Class | Test Method | Description | Key Assertions |
+|------------|-------------|-------------|----------------|
+| `ConcurrentBookingTest` | `concurrentBooking_shouldNotOversell` | 30 threads request 1 ticket each, but only 5 tickets available | Exactly 5 bookings succeed, 25 fail with `InsufficientInventoryException`; final inventory = 0 |
+| | `concurrentIdempotencyKey_shouldCreateOnlyOneBooking` | 10 threads share the same idempotency key | Only one booking is created; all other threads receive the `duplicate` response (or `Idempotency-Processed` header) |
+| | `concurrentVoucherUsage_shouldRespectLimit` | 10 threads try to use a voucher with `usage_limit = 3` | Exactly 3 succeed; 7 fail with voucher‑related error; voucher `used_count` becomes 3 |
+
+> **Known limitation:** The `concurrentIdempotencyKey_shouldCreateOnlyOneBooking` test may be temporarily disabled due to Hibernate session issues after a `DataIntegrityViolationException`. The core idempotency guarantee is still enforced by the database unique constraint.
+
+---
+
+### 7.3 Unit Tests (Service Layer)
+
+Unit tests use JUnit 5 and Mockito to mock repositories and dependencies. They cover all business logic.
+
+#### 7.3.1 `BookingServiceTest`
+
+| Test Method | Description | Key Assertions |
+|-------------|-------------|----------------|
+| `createBooking_Success_WithVoucher` | Create booking with valid voucher | Returns `BookingCreationResult` with `duplicate=false`; inventory decreased; voucher `used_count` incremented |
+| `createBooking_InvalidVoucher_ThrowsException` | Use non‑existing voucher code | Throws `VoucherInvalidException` |
+| `cancelBooking_Success` | Cancel pending booking | Status becomes `CANCELLED`; inventory released |
+| `cancelBooking_NotFound_ThrowsException` | Cancel non‑existent booking | Throws `ResourceNotFoundException` |
+| `cancelBooking_NotOwner_ThrowsAccessDenied` | Cancel another user’s booking | Throws `AccessDeniedException` |
+| `getBookingById_NotFound_ThrowsException` | Fetch non‑existent booking | Throws `ResourceNotFoundException` |
+| `getUserBookings_ReturnsList` | Get all bookings of a user | Returns non‑empty list with correct mapping |
+| `getAllBookings_WithFilters_ReturnsPage` | Admin paginated filter by status | Returns `Page<BookingResponse>` with matching bookings |
+| `updateBookingStatus_NotAdmin_ThrowsException` | Non‑admin tries to update status | Throws `AccessDeniedException` |
+
+#### 7.3.2 `ConcertServiceTest`
+
+| Test Method | Description | Key Assertions |
+|-------------|-------------|----------------|
+| `createConcert_Success` | Create new concert with categories | Returns `ConcertResponse` with status `DRAFT` |
+| `updateConcert_Success` | Update concert details | Fields updated correctly |
+| `publishConcert_Success` | Publish concert | Status becomes `PUBLISHED` |
+| `unpublishConcert_Success` | Unpublish concert | Status becomes `DRAFT` |
+| `getConcertById_Success` | Fetch concert by ID | Returns correct concert data |
+| `getConcertById_NotFound_ThrowsException` | Fetch non‑existent concert | Throws `ResourceNotFoundException` |
+| `getAllConcerts_WithFilters_ReturnsPage` | Admin paginated filter | Returns filtered page |
+| `getPublishedConcerts_ReturnsList` | Customer gets published concerts | Returns only concerts with status `PUBLISHED` |
+
+#### 7.3.3 `TicketCategoryServiceTest`
+
+| Test Method | Description | Key Assertions |
+|-------------|-------------|----------------|
+| `createTicketCategory_Success` | Create category under a concert | Category saved with correct quantity |
+| `updateTicketCategory_Success` | Update price or total quantity | Available quantity adjusted accordingly |
+| `reserveTicket_Success` | Reserve tickets (decrease available) | Available quantity decreased |
+| `reserveTicket_InsufficientQuantity_ThrowsException` | Reserve more than available | Throws `BusinessException` |
+| `getAllTicketCategories_WithFilters_ReturnsPage` | Filter by price and availability | Returns filtered page |
+
+#### 7.3.4 `VoucherServiceTest`
+
+| Test Method | Description | Key Assertions |
+|-------------|-------------|----------------|
+| `createVoucher_Success` | Create new voucher | Voucher saved with code, limit, validity |
+| `getVoucherById_Success` | Fetch voucher by ID | Returns correct voucher |
+| `getVoucherByCode_Success` | Fetch voucher by code | Returns correct voucher |
+| `useVoucher_Success` | Use voucher (increment used count) | `used_count` increased; usage recorded |
+| `useVoucher_AlreadyUsedByUser_ThrowsException` | Same user reuse voucher | Throws `BusinessException` |
+| `useVoucher_LimitReached_ThrowsException` | Exceed `usage_limit` | Throws `BusinessException` |
+
+#### 7.3.5 `UserServiceTest`
+
+| Test Method | Description | Key Assertions |
+|-------------|-------------|----------------|
+| `createUser_Success` | Create user (admin/customer) | User saved with correct role |
+| `updateUser_Success` | Update user details | Fields updated |
+| `getUserById_Success` | Fetch user by ID | Returns correct user |
+
+#### 7.3.6 `BookingItemServiceTest`
+
+| Test Method | Description | Key Assertions |
+|-------------|-------------|----------------|
+| `createBookingItem_Success` | Create a booking item | Item saved with unit price snapshot |
+| `getItemsByBookingId_ReturnsList` | Fetch items of a booking | List contains correct items |
+
+#### 7.3.7 `UserVoucherUsageServiceTest`
+
+| Test Method | Description | Key Assertions |
+|-------------|-------------|----------------|
+| `recordUsage_Success` | Record a voucher usage | Record inserted into `user_voucher_usage` |
+| `hasUserUsedVoucher_ReturnsTrue/False` | Check if user already used voucher | Returns correct boolean |
+
+---
+
+### 7.4 Controller Tests (Web Layer)
+
+These tests use `@WebMvcTest` to load only the web layer, with mocked services. They verify request validation, response structure, and security.
+
+| Test Class | Example Test Method | Description | Key Assertions |
+|------------|---------------------|-------------|----------------|
+| `CustomerBookingControllerTest` | `createBooking_Success` | POST `/api/bookings` with valid request | Returns 200 OK; response contains `bookingResponse` and `duplicate` flag |
+| | `createBooking_InsufficientInventory_ShouldReturn409` | Not enough tickets | Returns 409 Conflict with `INSUFFICIENT_INVENTORY` error |
+| | `cancelBooking_Success` | POST `/api/bookings/{id}/cancel` | Returns 200 OK with updated booking |
+| `CustomerConcertControllerTest` | `getPublishedConcerts_ShouldReturnList` | GET `/api/concerts` | Returns 200 OK with list of published concerts |
+| | `getConcertById_ShouldReturnConcert` | GET `/api/concerts/{id}` | Returns 200 OK with concert details |
+| `AuthControllerTest` | `register_ShouldReturnUserResponse` | POST `/api/auth/register` | Returns 200 OK with user details |
+| | `login_ShouldReturnTokens` | POST `/api/auth/login` | Returns 200 OK with access/refresh tokens |
+| `AdminBookingControllerTest` | `getAllBookings_ShouldReturnPage` | GET `/api/admin/bookings` | Returns 200 OK with paginated bookings |
+| `AdminConcertControllerTest` | `createConcert_Success` | POST `/api/admin/concerts` | Returns 200 OK with created concert |
+| `AdminVoucherControllerTest` | `createVoucher_Success` | POST `/api/admin/vouchers` | Returns 200 OK with voucher details |
+
+All controller tests include security context (e.g., `@WithMockUser` or `user(...)` in `MockMvc`) to simulate authentication and role‑based access.
+
+---
+
+### 7.5 Running the Tests
+
+Execute the full test suite with:
 
 ```bash
 ./mvnw test

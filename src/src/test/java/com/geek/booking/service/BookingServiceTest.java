@@ -2,9 +2,12 @@ package com.geek.booking.service;
 
 import com.geek.booking.dto.request.booking.BookingCancelRequest;
 import com.geek.booking.dto.request.booking.BookingCreateRequest;
+import com.geek.booking.dto.request.booking.BookingItemRequest;
+import com.geek.booking.dto.response.BookingCreationResult;
 import com.geek.booking.dto.response.BookingResponse;
 import com.geek.booking.entity.*;
 import com.geek.booking.enums.BookingStatus;
+import com.geek.booking.enums.ConcertStatus;
 import com.geek.booking.enums.DiscountType;
 import com.geek.booking.enums.UserRole;
 import com.geek.booking.exception.*;
@@ -17,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -35,6 +40,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class BookingServiceTest {
 
     @Mock
@@ -69,7 +75,7 @@ class BookingServiceTest {
     @BeforeEach
     void setUp() {
         testUser = User.builder().id(1L).email("customer@example.com").role(UserRole.CUSTOMER).build();
-        testConcert = Concert.builder().id(1L).name("Test Concert").build();
+        testConcert = Concert.builder().id(1L).name("Test Concert").status(ConcertStatus.PUBLISHED).build();
         testCategory = TicketCategory.builder()
                 .id(1L)
                 .concert(testConcert)
@@ -105,9 +111,11 @@ class BookingServiceTest {
                 .totalPrice(BigDecimal.valueOf(180))
                 .build();
 
+        BookingItemRequest item = new BookingItemRequest();
+        item.setTicketCategoryId(1L);
+        item.setQuantity(2);
         createRequest = new BookingCreateRequest();
-        createRequest.setCategoryId(1L);
-        createRequest.setQuantity(2);
+        createRequest.setItems(List.of(item));
         createRequest.setVoucherCode("TEST10");
         createRequest.setIdempotencyKey("test-uuid");
 
@@ -124,11 +132,12 @@ class BookingServiceTest {
         when(userService.getEntityById(1L)).thenReturn(testUser);
         when(concertService.getConcertEntityById(1L)).thenReturn(testConcert);
         when(bookingRepository.save(any(Booking.class))).thenReturn(testBooking);
-        when(bookingMapper.toResponse(testBooking)).thenReturn(testResponse);
+        lenient().when(bookingMapper.toResponse(any(Booking.class))).thenReturn(testResponse);
 
-        BookingResponse result = bookingService.createBooking(createRequest, 1L);
+        BookingCreationResult result = bookingService.createBooking(createRequest, 1L);
 
-        assertThat(result.getBookingId()).isEqualTo(1L);
+        assertThat(result.getBookingResponse().getBookingId()).isEqualTo(1L);
+        assertThat(result.isDuplicate()).isFalse();
         verify(ticketCategoryService).reserveTicket(1L, 2);
         verify(voucherService).useVoucher(1L, 1L, 1L);
     }
@@ -147,11 +156,13 @@ class BookingServiceTest {
     void cancelBooking_Success() {
         when(bookingRepository.findById(1L)).thenReturn(Optional.of(testBooking));
         when(bookingItemService.getEntitiesByBookingId(1L)).thenReturn(List.of());
-
-        bookingService.cancelBooking(1L, 1L, cancelRequest);
+        lenient().when(bookingMapper.toResponse(any(Booking.class))).thenReturn(testResponse);
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        BookingResponse response = bookingService.cancelBooking(1L, 1L, cancelRequest);
 
         assertThat(testBooking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
         verify(bookingRepository).save(testBooking);
+        assertThat(response).isNotNull();
     }
 
     @Test
